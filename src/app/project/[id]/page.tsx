@@ -11,6 +11,7 @@ import { ModelRouterPanel } from '@/components/model-router-panel';
 import { buildMockProject } from '@/lib/dag-builder';
 import { Button } from '@/components/ui/button';
 import { generateSceneAssets } from '@/lib/pipeline-runner';
+import { ErrorBoundary } from '@/components/error-boundary';
 import type { Project, Scene } from '@/lib/types';
 
 export default function ProjectPage() {
@@ -197,7 +198,9 @@ export default function ProjectPage() {
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Pipeline DAG */}
           <div className="flex-1 min-h-0 p-2">
-            <PipelineDAG project={liveProject} />
+            <ErrorBoundary label="Pipeline DAG">
+              <PipelineDAG project={liveProject} />
+            </ErrorBoundary>
           </div>
 
           <div className="flex-shrink-0 h-px bg-gray-800 mx-4" />
@@ -213,7 +216,9 @@ export default function ProjectPage() {
               )}
             </div>
             <div className="h-36 overflow-y-hidden">
-              <SceneTimeline scenes={liveProject.scenes} />
+              <ErrorBoundary label="Scene Timeline">
+                <SceneTimeline scenes={liveProject.scenes} />
+              </ErrorBoundary>
             </div>
           </div>
 
