@@ -176,8 +176,8 @@ export default function ProjectPage() {
             </Button>
           )}
 
-          {/* Watch button — enabled when at least 1 scene has complete image */}
-          {sceneCount > 0 && liveProject.scenes.some((s) => s.assets.find((a) => a.type === 'image')?.status === 'complete') && (
+          {/* Watch button — visible whenever scenes exist */}
+          {sceneCount > 0 && (
             <Button
               size="sm"
               variant="ghost"

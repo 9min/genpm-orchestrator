@@ -2,8 +2,6 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { Scene } from '@/lib/types';
-import { getAssetBlobUrl } from '@/lib/storage';
-import { speak } from '@/lib/providers/web-speech';
 
 export type PlayerState = 'idle' | 'playing' | 'paused' | 'complete';
 
@@ -23,86 +21,65 @@ export interface VideoPlayerControls {
   stop: () => void;
 }
 
+// Estimate speech duration from text length (~120 words/min, ~5 chars/word)
+function estimateDurationMs(text: string): number {
+  return Math.max(3000, (text.length / 5 / 120) * 60_000);
+}
+
 export function useVideoPlayer(scenes: Scene[]): [VideoPlayerState, VideoPlayerControls] {
   const [state, setState] = useState<PlayerState>('idle');
   const [currentIndex, setCurrentIndex] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
   const isPlayingRef = useRef(false);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function cleanupAudio() {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.onended = null;
-      audioRef.current = null;
-    }
-    if (blobUrlRef.current) {
-      URL.revokeObjectURL(blobUrlRef.current);
-      blobUrlRef.current = null;
-    }
-    if (typeof window !== 'undefined') {
-      window.speechSynthesis?.cancel();
+  function stopSpeech() {
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
     }
   }
 
   const playScene = useCallback(
-    async (index: number) => {
+    (index: number) => {
       if (index >= scenes.length) {
+        stopSpeech();
         setState('complete');
         isPlayingRef.current = false;
         return;
       }
 
-      cleanupAudio();
+      stopSpeech();
       setCurrentIndex(index);
       setState('playing');
 
       const scene = scenes[index];
-      const voiceAsset = scene.assets.find((a) => a.type === 'voice');
 
-      function onAudioEnd() {
+      function onEnd() {
         if (!isPlayingRef.current) return;
         playScene(index + 1);
       }
 
-      if (voiceAsset?.result) {
-        const url = await getAssetBlobUrl(voiceAsset.result);
-        if (url && isPlayingRef.current) {
-          blobUrlRef.current = url;
-          const audio = new Audio(url);
-          audioRef.current = audio;
-          audio.onended = onAudioEnd;
-          audio.onerror = () => {
-            // Fallback to Web Speech on audio error
-            speakWithFallback(scene.voiceScript, onAudioEnd);
-          };
-          audio.play().catch(() => {
-            speakWithFallback(scene.voiceScript, onAudioEnd);
-          });
-          return;
-        }
+      // Always use Web Speech API — stored blobs are empty because Web Speech
+      // audio output bypasses AudioContext (can't be captured by MediaRecorder).
+      if (typeof window === 'undefined' || !window.speechSynthesis) {
+        // No speech: time-based fallback
+        fallbackTimerRef.current = setTimeout(onEnd, estimateDurationMs(scene.voiceScript));
+        return;
       }
 
-      // Fallback: Web Speech API
-      speakWithFallback(scene.voiceScript, onAudioEnd);
+      const utterance = new SpeechSynthesisUtterance(scene.voiceScript);
+      utterance.rate = 0.9;
+      utterance.lang = 'en-US';
+      utterance.onend = onEnd;
+      utterance.onerror = () => {
+        // On error: wait proportional to text length before advancing
+        fallbackTimerRef.current = setTimeout(onEnd, estimateDurationMs(scene.voiceScript));
+      };
+      window.speechSynthesis.speak(utterance);
     },
     [scenes]
   );
-
-  function speakWithFallback(text: string, onEnd: () => void) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      // No speech available — advance after 5s per scene
-      const t = setTimeout(onEnd, 5000);
-      audioRef.current = { pause: () => clearTimeout(t), onended: null } as unknown as HTMLAudioElement;
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.onend = onEnd;
-    utterance.onerror = onEnd;
-    window.speechSynthesis.speak(utterance);
-  }
 
   const play = useCallback(() => {
     isPlayingRef.current = true;
@@ -112,18 +89,17 @@ export function useVideoPlayer(scenes: Scene[]): [VideoPlayerState, VideoPlayerC
   const pause = useCallback(() => {
     isPlayingRef.current = false;
     setState('paused');
-    if (audioRef.current) audioRef.current.pause();
-    if (typeof window !== 'undefined') window.speechSynthesis?.pause();
+    window.speechSynthesis?.pause();
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
   }, []);
 
   const resume = useCallback(() => {
     isPlayingRef.current = true;
     setState('playing');
-    if (audioRef.current) {
-      audioRef.current.play().catch(() => {});
-    } else if (typeof window !== 'undefined') {
-      window.speechSynthesis?.resume();
-    }
+    window.speechSynthesis?.resume();
   }, []);
 
   const next = useCallback(() => {
@@ -152,7 +128,7 @@ export function useVideoPlayer(scenes: Scene[]): [VideoPlayerState, VideoPlayerC
 
   const stop = useCallback(() => {
     isPlayingRef.current = false;
-    cleanupAudio();
+    stopSpeech();
     setState('idle');
     setCurrentIndex(0);
   }, []);

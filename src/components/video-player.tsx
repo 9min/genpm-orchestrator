@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Scene } from '@/lib/types';
 import { getAssetBlobUrl } from '@/lib/storage';
 import { useVideoPlayer } from '@/hooks/useVideoPlayer';
 
-// Ken Burns keyframe variants — different per scene to avoid monotony
 const KB_VARIANTS = [
   'kenburns-zoom-in-left',
   'kenburns-zoom-in-right',
@@ -21,27 +20,11 @@ interface SceneFrameProps {
   scene: Scene;
   isActive: boolean;
   variant: string;
+  imgUrl: string | null;
 }
 
-function SceneFrame({ scene, isActive, variant }: SceneFrameProps) {
-  const imgAsset = scene.assets.find((a) => a.type === 'image');
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!imgAsset?.result) return;
-    let url: string;
-    getAssetBlobUrl(imgAsset.result).then((u) => {
-      if (u) {
-        url = u;
-        setImgUrl(u);
-      }
-    });
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [imgAsset?.result]);
-
-  const hasImage = imgAsset?.status === 'complete' && imgUrl;
+function SceneFrame({ scene, isActive, variant, imgUrl }: SceneFrameProps) {
+  const hasImage = !!imgUrl;
 
   return (
     <div className="absolute inset-0 overflow-hidden rounded-lg">
@@ -55,13 +38,16 @@ function SceneFrame({ scene, isActive, variant }: SceneFrameProps) {
         />
       ) : (
         <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-          <p className="text-gray-400 text-sm text-center px-4">{scene.description}</p>
+          <p className="text-gray-400 text-sm text-center px-6 leading-relaxed">
+            {scene.description}
+          </p>
         </div>
       )}
+
       {/* Subtitle overlay */}
       {isActive && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-8">
-          <p className="text-white text-sm text-center leading-relaxed">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 pb-5 pt-10">
+          <p className="text-white text-sm text-center leading-relaxed drop-shadow">
             {scene.voiceScript}
           </p>
         </div>
@@ -76,6 +62,37 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
+  // Preload all image blob URLs upfront to avoid async race with scene transitions
+  const [imageUrls, setImageUrls] = useState<Record<string, string | null>>({});
+  const [ready, setReady] = useState(false);
+  const urlsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      scenes.map(async (scene) => {
+        const imgAsset = scene.assets.find((a) => a.type === 'image');
+        if (!imgAsset?.result) return [scene.sceneId, null] as const;
+        const url = await getAssetBlobUrl(imgAsset.result);
+        if (url) urlsRef.current.push(url);
+        return [scene.sceneId, url ?? null] as const;
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      const map: Record<string, string | null> = {};
+      for (const [id, url] of entries) map[id] = url;
+      setImageUrls(map);
+      setReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      // Revoke on player close (not on scene change)
+      for (const url of urlsRef.current) URL.revokeObjectURL(url);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [playerState, controls] = useVideoPlayer(scenes);
   const { state, currentIndex, totalScenes } = playerState;
 
@@ -84,14 +101,15 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
   const isComplete = state === 'complete';
   const isIdle = state === 'idle';
 
-  // Auto-start on mount
+  // Auto-start once image URLs are preloaded
   useEffect(() => {
+    if (!ready) return;
     controls.play();
     return () => controls.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
-  // Close on Escape
+  // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') { controls.stop(); onClose(); }
@@ -115,7 +133,11 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
         {/* Header */}
         <div className="flex items-center justify-between mb-3 px-1">
           <span className="text-sm text-gray-400 font-medium">
-            {isComplete ? 'Complete' : `Scene ${currentIndex + 1} / ${totalScenes}`}
+            {!ready
+              ? 'Loading...'
+              : isComplete
+              ? 'Complete'
+              : `Scene ${currentIndex + 1} / ${totalScenes}`}
           </span>
           <button
             onClick={() => { controls.stop(); onClose(); }}
@@ -127,14 +149,22 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
 
         {/* Video frame */}
         <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
-          {currentScene && !isComplete && (
+          {!ready && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-gray-500 text-sm animate-pulse">Preparing...</div>
+            </div>
+          )}
+
+          {ready && currentScene && !isComplete && (
             <SceneFrame
               scene={currentScene}
               isActive={isPlaying}
               variant={getVariant(currentIndex)}
+              imgUrl={imageUrls[currentScene.sceneId] ?? null}
             />
           )}
-          {isComplete && (
+
+          {ready && isComplete && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
               <div className="text-4xl">🎬</div>
               <p className="text-gray-300 text-sm">Playback complete</p>
@@ -146,7 +176,8 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
               </button>
             </div>
           )}
-          {isIdle && (
+
+          {ready && isIdle && (
             <div className="absolute inset-0 flex items-center justify-center">
               <button
                 onClick={controls.play}
@@ -179,7 +210,7 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
         <div className="flex items-center justify-center gap-3 mt-3">
           <button
             onClick={controls.prev}
-            disabled={currentIndex === 0 || isIdle}
+            disabled={currentIndex === 0 || isIdle || !ready}
             className="text-gray-400 hover:text-white disabled:opacity-30 transition-colors px-3 py-1.5 text-sm rounded hover:bg-gray-800"
           >
             ◀ Prev
@@ -187,14 +218,15 @@ export function VideoPlayer({ scenes, onClose }: VideoPlayerProps) {
 
           <button
             onClick={handlePlayPause}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-6 py-2 rounded-md transition-colors min-w-[80px]"
+            disabled={!ready}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm px-6 py-2 rounded-md transition-colors min-w-[80px]"
           >
             {isPlaying ? '⏸ Pause' : isComplete ? '↺ Replay' : '▶ Play'}
           </button>
 
           <button
             onClick={controls.next}
-            disabled={currentIndex >= totalScenes - 1 || isIdle || isComplete}
+            disabled={currentIndex >= totalScenes - 1 || isIdle || isComplete || !ready}
             className="text-gray-400 hover:text-white disabled:opacity-30 transition-colors px-3 py-1.5 text-sm rounded hover:bg-gray-800"
           >
             Next ▶
