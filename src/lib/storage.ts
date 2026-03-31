@@ -18,6 +18,12 @@ function getDB(): Promise<IDBPDatabase> {
         }
       },
     });
+    // Reset on failure so the next caller retries instead of getting a
+    // permanently rejected promise (e.g. private browsing with storage blocked)
+    dbPromise.catch((err) => {
+      console.warn('[SceneForge] IndexedDB unavailable:', err);
+      dbPromise = null;
+    });
   }
   return dbPromise;
 }

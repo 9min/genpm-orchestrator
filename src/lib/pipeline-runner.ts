@@ -1,5 +1,6 @@
 'use client';
 
+import pLimit from 'p-limit';
 import type { Project, Scene, Asset } from './types';
 import { decomposeScript } from './providers/gemini-flash';
 import { generateImage } from './providers/hf-sdxl';
@@ -8,6 +9,9 @@ import { speakAndRecord } from './providers/web-speech';
 import { saveBase64AsBlob } from './storage';
 import { costTracker } from './cost-tracker';
 import { modelRouter } from './model-router';
+
+// Max concurrent HF API calls to avoid rate-limit 429s
+const imageLimit = pLimit(3);
 
 type StoreUpdater = {
   setScenes: (projectId: string, scenes: Scene[]) => void;
@@ -100,9 +104,9 @@ export async function generateSceneAssets(
   const imgAsset = scene.assets.find((a) => a.type === 'image')!;
   const voiceAsset = scene.assets.find((a) => a.type === 'voice')!;
 
-  // Run image and voice in parallel
+  // Run image (rate-limited) and voice in parallel
   await Promise.allSettled([
-    generateImageAsset(projectId, scene, imgAsset, store),
+    imageLimit(() => generateImageAsset(projectId, scene, imgAsset, store)),
     generateVoiceAsset(projectId, scene, voiceAsset, store),
   ]);
 }

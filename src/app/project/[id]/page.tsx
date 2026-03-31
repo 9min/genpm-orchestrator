@@ -192,10 +192,19 @@ export default function ProjectPage() {
 
       {/* Video player modal */}
       {showPlayer && (
-        <VideoPlayer
-          scenes={liveProject.scenes}
-          onClose={() => setShowPlayer(false)}
-        />
+        <ErrorBoundary label="Video Player" fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+            <div className="text-center text-gray-300 space-y-3">
+              <p className="text-sm">플레이어 오류가 발생했습니다.</p>
+              <button onClick={() => setShowPlayer(false)} className="text-xs text-gray-500 hover:text-white">닫기</button>
+            </div>
+          </div>
+        }>
+          <VideoPlayer
+            scenes={liveProject.scenes}
+            onClose={() => setShowPlayer(false)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Provider selector bar */}

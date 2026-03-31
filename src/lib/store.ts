@@ -90,6 +90,10 @@ export const useProjectStore = create<ProjectStore>()(
           activeProjectId:
             state.activeProjectId === id ? null : state.activeProjectId,
         }));
+        // Clean up IndexedDB blobs asynchronously
+        import('./storage').then(({ deleteProjectBlobs }) => {
+          deleteProjectBlobs(id).catch(() => {});
+        });
       },
 
       setActiveProject: (id) => set({ activeProjectId: id }),

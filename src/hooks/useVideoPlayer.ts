@@ -31,6 +31,8 @@ export function useVideoPlayer(scenes: Scene[]): [VideoPlayerState, VideoPlayerC
   const [currentIndex, setCurrentIndex] = useState(0);
   const isPlayingRef = useRef(false);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True when paused while a fallback timer (no speechSynthesis) was active
+  const pausedWithFallbackRef = useRef(false);
 
   function stopSpeech() {
     if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
@@ -89,18 +91,27 @@ export function useVideoPlayer(scenes: Scene[]): [VideoPlayerState, VideoPlayerC
   const pause = useCallback(() => {
     isPlayingRef.current = false;
     setState('paused');
-    window.speechSynthesis?.pause();
+    if (typeof window !== 'undefined') window.speechSynthesis?.pause();
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current);
       fallbackTimerRef.current = null;
+      pausedWithFallbackRef.current = true;
+    } else {
+      pausedWithFallbackRef.current = false;
     }
   }, []);
 
   const resume = useCallback(() => {
     isPlayingRef.current = true;
     setState('playing');
-    window.speechSynthesis?.resume();
-  }, []);
+    if (pausedWithFallbackRef.current) {
+      // Fallback timer was active when paused — restart the scene
+      pausedWithFallbackRef.current = false;
+      playScene(currentIndex);
+    } else {
+      if (typeof window !== 'undefined') window.speechSynthesis?.resume();
+    }
+  }, [playScene, currentIndex]);
 
   const next = useCallback(() => {
     if (currentIndex < scenes.length - 1) {
