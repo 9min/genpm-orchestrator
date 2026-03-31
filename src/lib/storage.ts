@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { StoredBlob } from './types';
 
-const DB_NAME = 'genpm-assets';
+const DB_NAME = 'sceneforge-assets';
 const DB_VERSION = 1;
 const STORE_NAME = 'blobs';
 

@@ -46,9 +46,9 @@ export default function HomePage() {
       <header className="border-b border-gray-800 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-100">GenPM Pipeline Orchestrator</h1>
+            <h1 className="text-xl font-bold text-gray-100">SceneForge</h1>
             <p className="text-xs text-gray-500 mt-0.5">
-              AI video pipeline architecture visualizer
+              AI video pipeline orchestrator
             </p>
           </div>
           <span className="text-xs text-gray-600 bg-gray-800 px-2 py-1 rounded-full">

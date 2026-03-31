@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "GenPM Pipeline Orchestrator",
-  description: "AI video pipeline orchestration visualizer — DAG-based decision explorer",
+  title: "SceneForge",
+  description: "AI video pipeline orchestrator — script to scenes, visualized as a DAG",
 };
 
 export default function RootLayout({

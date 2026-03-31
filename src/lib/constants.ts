@@ -1,5 +1,5 @@
 // Commercial pricing simulation (what these would cost with paid models)
-// Based on GenPM pricing tiers and individual model pricing
+// Commercial pricing simulation for SceneForge
 
 export const COMMERCIAL_PRICING = {
   // Image generation: DALL-E 3 standard 1024x1024

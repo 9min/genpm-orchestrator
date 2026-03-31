@@ -205,7 +205,7 @@ export const useProjectStore = create<ProjectStore>()(
       },
     }),
     {
-      name: 'genpm-projects',
+      name: 'sceneforge-projects',
       // Only persist metadata, NOT asset results (those go in IndexedDB)
       partialize: (state) => ({
         projects: state.projects.map((p) => ({

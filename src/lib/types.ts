@@ -1,4 +1,4 @@
-// Core data model for GenPM Pipeline Orchestrator
+// Core data model for SceneForge
 
 export type AssetType = 'image' | 'voice' | 'video';
 export type AssetStatus = 'pending' | 'generating' | 'complete' | 'failed';
