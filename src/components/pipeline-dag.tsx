@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -46,8 +46,15 @@ interface PipelineDAGProps {
 export function PipelineDAG({ project }: PipelineDAGProps) {
   const { nodes: builtNodes, edges: builtEdges } = useMemo(
     () => buildDAGFromProject(project),
+    // Rebuild when scene count or any asset status changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project.id, project.scenes.length, project.pipeline.dag.length]
+    [
+      project.id,
+      project.scenes.length,
+      project.pipeline.dag.length,
+      // Track asset statuses so DAG updates during generation
+      project.scenes.map((s) => s.assets.map((a) => a.status).join(',')).join('|'),
+    ]
   );
 
   const styledEdges = useMemo(
@@ -61,9 +68,20 @@ export function PipelineDAG({ project }: PipelineDAGProps) {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [nodes, , onNodesChange] = useNodesState(builtNodes as any);
+  const [nodes, setNodes, onNodesChange] = useNodesState(builtNodes as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [edges, , onEdgesChange] = useEdgesState(styledEdges as any);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(styledEdges as any);
+
+  // Sync external changes (store updates) into ReactFlow state
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setNodes(builtNodes as any);
+  }, [builtNodes, setNodes]);
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setEdges(styledEdges as any);
+  }, [styledEdges, setEdges]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: { id: string; data: unknown }) => {
     console.log('Node clicked:', node.id, node.data);

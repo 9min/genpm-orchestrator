@@ -54,6 +54,24 @@ She follows the signal through alien ruins, deciphering ancient messages.
 The signal leads to a hidden chamber containing proof of a lost civilization.
 She transmits the discovery back to Earth, changing humanity's understanding of the universe forever.`;
 
+export const DEMO_PRESET_SCENES = [
+  {
+    description: 'Astronaut discovers mysterious signal on alien planet',
+    imagePrompt: 'Cinematic wide shot, lone astronaut in orange spacesuit on red rocky alien planet, dramatic sunset sky, mysterious green signal beacon glowing in distance, dust particles in air, epic scale',
+    voiceScript: 'In the silence of a distant world, Commander Chen detected something that would change everything.',
+  },
+  {
+    description: 'Following the signal through ancient alien ruins',
+    imagePrompt: 'Dark ancient alien ruins, crumbling stone structures covered in glowing blue symbols, astronaut exploring with helmet flashlight, thick atmospheric fog, mysterious and eerie, cinematic lighting',
+    voiceScript: 'The signal led through crumbling ruins, each symbol telling a story older than human civilization.',
+  },
+  {
+    description: 'Hidden chamber reveals proof of a lost civilization',
+    imagePrompt: 'Ancient underground chamber, crystalline holographic displays activated by astronaut presence, alien artifacts glowing gold, warm golden light filling the space, awe-inspiring discovery moment',
+    voiceScript: 'The chamber revealed a truth humanity had long suspected — we were never alone.',
+  },
+];
+
 export const SCENE_DECOMPOSE_PROMPT_TEMPLATE = `You are a creative director decomposing a script into visual scenes.
 
 Script:

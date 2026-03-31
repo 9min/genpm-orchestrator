@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Project, Scene } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { DEMO_PRESET_SCRIPT, MIN_SCENES, MAX_SCENES } from '@/lib/constants';
+import { DEMO_PRESET_SCRIPT, DEMO_PRESET_SCENES, MIN_SCENES, MAX_SCENES } from '@/lib/constants';
 
 interface ScriptEngineProps {
   project: Project;
@@ -196,7 +196,10 @@ export function ScriptEngine({ project, onScenesGenerated, onScriptChange }: Scr
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs text-gray-400">Script / Story</label>
             <button
-              onClick={() => onScriptChange(DEMO_PRESET_SCRIPT)}
+              onClick={() => {
+                onScriptChange(DEMO_PRESET_SCRIPT);
+                setManualScenes(DEMO_PRESET_SCENES.map((s) => ({ ...s })));
+              }}
               className="text-xs text-indigo-400 hover:text-indigo-300"
             >
               Try Demo

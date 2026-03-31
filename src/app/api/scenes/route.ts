@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const genai = new GoogleGenerativeAI(apiKey);
-    const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
     const start = Date.now();
     const result = await model.generateContent(prompt);
@@ -60,8 +60,11 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     // Surface quota/auth errors distinctly so client can fallback gracefully
     if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      // Extract retry delay if present (e.g. "retry in 56.7s")
+      const retryMatch = msg.match(/retry[^0-9]*(\d+)/i);
+      const retrySec = retryMatch ? Math.ceil(Number(retryMatch[1])) : 60;
       return NextResponse.json(
-        { error: 'Gemini quota exceeded', code: 'QUOTA_EXCEEDED' },
+        { error: `Gemini rate limit — retry in ${retrySec}s`, code: 'QUOTA_EXCEEDED' },
         { status: 429 }
       );
     }
