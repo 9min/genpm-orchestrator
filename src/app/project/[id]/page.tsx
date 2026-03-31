@@ -1,21 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useProjectStore } from '@/lib/store';
 import { PipelineDAG } from '@/components/pipeline-dag';
 import { SceneTimeline } from '@/components/scene-timeline';
+import { ScriptEngine } from '@/components/script-engine';
+import { CostDashboard } from '@/components/cost-dashboard';
+import { ModelRouterPanel } from '@/components/model-router-panel';
 import { buildMockProject } from '@/lib/dag-builder';
 import { Button } from '@/components/ui/button';
-import type { Project } from '@/lib/types';
+import { generateSceneAssets } from '@/lib/pipeline-runner';
+import type { Project, Scene } from '@/lib/types';
 
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { projects, setActiveProject } = useProjectStore();
+  const store = useProjectStore();
+  const { projects, setActiveProject, setScript, setScenes, setProvider } = store;
   const [project, setProject] = useState<Project | null>(null);
   const [useMock, setUseMock] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [apiStatus, setApiStatus] = useState<{
+    gemini: string;
+    huggingface: string;
+  } | null>(null);
+  const hasCheckedHealth = useRef(false);
 
+  // Keep local project state in sync with store
   useEffect(() => {
     const id = params.id;
     if (id === 'mock') {
@@ -32,6 +44,53 @@ export default function ProjectPage() {
     }
   }, [params.id, projects, setActiveProject, router]);
 
+  // Check API health once on mount
+  useEffect(() => {
+    if (hasCheckedHealth.current || useMock) return;
+    hasCheckedHealth.current = true;
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((data) => setApiStatus({ gemini: data.gemini, huggingface: data.huggingface }))
+      .catch(() => {});
+  }, [useMock]);
+
+  const handleScriptChange = useCallback(
+    (script: string) => {
+      if (!project || useMock) return;
+      setScript(project.id, script);
+    },
+    [project, useMock, setScript]
+  );
+
+  const handleScenesGenerated = useCallback(
+    (scenes: Scene[]) => {
+      if (!project || useMock) return;
+      setScenes(project.id, scenes);
+    },
+    [project, useMock, setScenes]
+  );
+
+  const handleProviderChange = useCallback(
+    (type: keyof Project['activeProvider'], provider: string) => {
+      if (!project || useMock) return;
+      setProvider(project.id, type, provider);
+    },
+    [project, useMock, setProvider]
+  );
+
+  const handleGenerateAll = useCallback(async () => {
+    if (!project || useMock || generating) return;
+    const currentProject = projects.find((p) => p.id === project.id);
+    if (!currentProject || currentProject.scenes.length === 0) return;
+
+    setGenerating(true);
+    // Generate all scenes in parallel
+    await Promise.allSettled(
+      currentProject.scenes.map((scene) => generateSceneAssets(currentProject, scene, store))
+    );
+    setGenerating(false);
+  }, [project, useMock, generating, projects, store]);
+
   if (!project) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500">
@@ -40,16 +99,20 @@ export default function ProjectPage() {
     );
   }
 
-  const totalCost = project.pipeline.totalCost;
-  const sceneCount = project.scenes.length;
-  const completeCount = project.scenes.filter((s) =>
+  const liveProject = useMock ? project : (projects.find((p) => p.id === project.id) ?? project);
+  const sceneCount = liveProject.scenes.length;
+  const completeCount = liveProject.scenes.filter((s) =>
     s.assets.every((a) => a.status === 'complete')
   ).length;
+  const totalCost = liveProject.pipeline.totalCost;
+  const pendingScenes = liveProject.scenes.filter((s) =>
+    s.assets.some((a) => a.status === 'pending' || a.status === 'failed')
+  );
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Top bar */}
-      <header className="flex-shrink-0 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <header className="flex-shrink-0 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/')}
@@ -58,7 +121,7 @@ export default function ProjectPage() {
             ← Projects
           </button>
           <span className="text-gray-700">/</span>
-          <h1 className="text-sm font-semibold text-gray-100">{project.name}</h1>
+          <h1 className="text-sm font-semibold text-gray-100">{liveProject.name}</h1>
           {useMock && (
             <span className="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded-full border border-amber-700/30">
               Demo Mode
@@ -66,52 +129,96 @@ export default function ProjectPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Stats */}
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            {sceneCount > 0 && (
-              <span>
-                {completeCount}/{sceneCount} scenes done
+        <div className="flex items-center gap-3">
+          {/* API key status indicators */}
+          {apiStatus && !useMock && (
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={
+                  apiStatus.gemini === 'configured' ? 'text-green-400' : 'text-gray-600'
+                }
+                title={`Gemini: ${apiStatus.gemini}`}
+              >
+                ◉ Gemini
               </span>
-            )}
-            {totalCost.usd > 0 && (
-              <span className="text-emerald-400">
-                ~${totalCost.usd.toFixed(2)} saved
+              <span
+                className={
+                  apiStatus.huggingface === 'configured' ? 'text-green-400' : 'text-gray-600'
+                }
+                title={`HuggingFace: ${apiStatus.huggingface}`}
+              >
+                ◉ HF
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          <Button variant="secondary" size="sm" onClick={() => router.push('/')}>
-            All Projects
-          </Button>
+          {sceneCount > 0 && (
+            <span className="text-xs text-gray-500">
+              {completeCount}/{sceneCount} done
+            </span>
+          )}
+          {totalCost.usd > 0 && (
+            <span className="text-xs text-emerald-400">~${totalCost.usd.toFixed(3)} saved</span>
+          )}
+
+          {/* Generate All button */}
+          {pendingScenes.length > 0 && !useMock && (
+            <Button
+              size="sm"
+              onClick={handleGenerateAll}
+              loading={generating}
+              disabled={generating}
+            >
+              {generating ? 'Generating...' : `Generate All (${pendingScenes.length})`}
+            </Button>
+          )}
         </div>
       </header>
 
-      {/* Main workspace: split into DAG (top) + Timeline (bottom) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Pipeline DAG — 60% height */}
-        <div className="flex-1 min-h-0" style={{ flex: '1 1 60%' }}>
-          <div className="h-full p-2">
-            <PipelineDAG project={project} />
-          </div>
-        </div>
+      {/* Provider selector bar */}
+      {!useMock && (
+        <ModelRouterPanel project={liveProject} onProviderChange={handleProviderChange} />
+      )}
 
-        {/* Divider */}
-        <div className="flex-shrink-0 h-px bg-gray-800 mx-4" />
+      {/* Main workspace */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Left panel: Script Engine (collapsible) */}
+        {!useMock && (
+          <div className="w-72 flex-shrink-0 border-r border-gray-800 overflow-y-auto p-3 space-y-3">
+            <ScriptEngine
+              project={liveProject}
+              onScenesGenerated={handleScenesGenerated}
+              onScriptChange={handleScriptChange}
+            />
+          </div>
+        )}
 
-        {/* Scene Timeline — fixed 200px */}
-        <div className="flex-shrink-0 h-52 px-4 py-3 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              Scene Timeline
-            </h2>
-            {sceneCount > 0 && (
-              <span className="text-xs text-gray-500">{sceneCount} scenes</span>
-            )}
+        {/* Right: DAG + Timeline */}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* Pipeline DAG */}
+          <div className="flex-1 min-h-0 p-2">
+            <PipelineDAG project={liveProject} />
           </div>
-          <div className="h-40 overflow-y-hidden">
-            <SceneTimeline scenes={project.scenes} />
+
+          <div className="flex-shrink-0 h-px bg-gray-800 mx-4" />
+
+          {/* Scene Timeline */}
+          <div className="flex-shrink-0 h-48 px-4 py-2 overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Scene Timeline
+              </h2>
+              {sceneCount > 0 && (
+                <span className="text-xs text-gray-500">{sceneCount} scenes</span>
+              )}
+            </div>
+            <div className="h-36 overflow-y-hidden">
+              <SceneTimeline scenes={liveProject.scenes} />
+            </div>
           </div>
+
+          {/* Cost bar */}
+          <CostDashboard project={liveProject} />
         </div>
       </div>
     </div>
