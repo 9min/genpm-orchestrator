@@ -118,6 +118,29 @@ body {
   @apply bg-gray-700 text-gray-400 text-xs px-1.5 py-0.5 rounded;
 }
 
+/* Ken Burns animations for video player */
+@keyframes kenburns-zoom-in-left {
+  from { transform: scale(1) translate(0, 0); }
+  to   { transform: scale(1.15) translate(-3%, -2%); }
+}
+@keyframes kenburns-zoom-in-right {
+  from { transform: scale(1) translate(0, 0); }
+  to   { transform: scale(1.15) translate(3%, -2%); }
+}
+@keyframes kenburns-zoom-out-center {
+  from { transform: scale(1.15) translate(0, 0); }
+  to   { transform: scale(1) translate(0, 0); }
+}
+@keyframes kenburns-pan-right {
+  from { transform: scale(1.1) translate(-4%, 0); }
+  to   { transform: scale(1.1) translate(4%, 0); }
+}
+
+.kenburns-zoom-in-left  { animation-name: kenburns-zoom-in-left;  animation-timing-function: ease-out; }
+.kenburns-zoom-in-right { animation-name: kenburns-zoom-in-right; animation-timing-function: ease-out; }
+.kenburns-zoom-out-center { animation-name: kenburns-zoom-out-center; animation-timing-function: ease-in; }
+.kenburns-pan-right     { animation-name: kenburns-pan-right;     animation-timing-function: linear; }
+
 /* ReactFlow overrides */
 .react-flow__node {
   cursor: default !important;

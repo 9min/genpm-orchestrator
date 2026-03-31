@@ -12,6 +12,7 @@ import { buildMockProject } from '@/lib/dag-builder';
 import { Button } from '@/components/ui/button';
 import { generateSceneAssets } from '@/lib/pipeline-runner';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { VideoPlayer } from '@/components/video-player';
 import type { Project, Scene } from '@/lib/types';
 
 export default function ProjectPage() {
@@ -22,6 +23,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [useMock, setUseMock] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false);
   const [apiStatus, setApiStatus] = useState<{
     gemini: string;
     huggingface: string;
@@ -173,8 +175,28 @@ export default function ProjectPage() {
               {generating ? 'Generating...' : `Generate All (${pendingScenes.length})`}
             </Button>
           )}
+
+          {/* Watch button — visible whenever scenes exist */}
+          {sceneCount > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowPlayer(true)}
+              className="border border-indigo-700/50 text-indigo-400 hover:text-indigo-300"
+            >
+              ▶ Watch
+            </Button>
+          )}
         </div>
       </header>
+
+      {/* Video player modal */}
+      {showPlayer && (
+        <VideoPlayer
+          scenes={liveProject.scenes}
+          onClose={() => setShowPlayer(false)}
+        />
+      )}
 
       {/* Provider selector bar */}
       {!useMock && (
